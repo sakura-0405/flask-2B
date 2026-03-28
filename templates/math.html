@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head><title>次方與根號計算</title></head>
+<body>
+    <h2>次方與根號計算</h2>
+    <form method="POST">
+        x: <input type="number" step="any" name="x" required> <br><br>
+        運算：
+        <select name="opt">
+            <option value="∧">∧ (次方)</option>
+            <option value="√">√ (根號)</option>
+        </select> <br><br>
+        y: <input type="number" step="any" name="y" required> <br><br>
+        <button type="submit">計算</button>
+    </form>
+
+    <hr>
+    <!-- 如果有結果就顯示出來 -->
+    {% if final_result is defined %}
+        <h3>計算結果：{{ final_result }}</h3>
+    {% endif %}
+    
+    <br>
+    <a href="/">返回首頁</a>
+</body>
+</html>
