@@ -95,7 +95,7 @@ def read():
     collection_ref = db.collection("靜宜資管")    
     docs = collection_ref.get()    
     for doc in docs:         
-        Result += str(doc.to_dict()) + "<br>"    
+        Result += (doc.to_dict()) + "<br>"    
     return Result
 
 
