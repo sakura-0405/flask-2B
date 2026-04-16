@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <title>教師搜尋系統</title>
+</head>
+<body>
+    <h2>靜宜資管教師搜尋</h2>
+    
+    <form action="/ready" method="GET">
+        <input type="text" name="keyword" placeholder="輸入教師姓名..." value="{{ keyword }}">
+        <button type="submit">搜尋</button>
+    </form>
+    
+    <hr>
+
+    <div id="results">
+    {% if results %}
+        {% for teacher in results %}
+            <div style="border:1px solid #ccc; margin:10px; padding:10px;">
+                <p><strong>姓名：</strong> {{ teacher['name'] }}</p>
+                <p><strong>研究室：</strong> {{ teacher['lab'] }}</p>
+                <p><strong>電子郵件：</strong> {{ teacher['mail'] }}</p>
+            </div>
+        {% endfor %}
+    {% elif keyword %}
+        <p>找不到關於 "{{ keyword }}" 的資料。</p>
+    {% else %}
+        <p>請輸入老師姓名進行搜尋。</p>
+    {% endif %}
+</div>
+</body>
+</html>
