@@ -42,7 +42,7 @@ def index():
     link += "<a href=/spider_course>爬取子青老師本學期課程</a><hr>"
     link += "<a href=/get_movies>爬取即將上映電影</a><hr>"
     link += "<a href=/get_moviesbase>爬取即將上映電影並存入資料庫</a><hr>"
-    link += "<a href=/get_moviesbase>查詢資料庫內的電影</a><hr>"
+    link += "<a href=/search_base>查詢資料庫內的電影</a><hr>"
     return link
 
 # --- 2. 靜態/簡單頁面 ---
