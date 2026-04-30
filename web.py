@@ -42,6 +42,7 @@ def index():
     link += "<a href=/spider_course>爬取子青老師本學期課程</a><hr>"
     link += "<a href=/get_movies>爬取即將上映電影</a><hr>"
     link += "<a href=/get_moviesbase>爬取即將上映電影並存入資料庫</a><hr>"
+    link += "<a href=/get_moviesbase>查詢資料庫內的電影</a><hr>"
     return link
 
 # --- 2. 靜態/簡單頁面 ---
@@ -229,6 +230,54 @@ def movie_base():
     R += "總共爬取" + str(total) + "部電影到資料庫"
 
     return R
+
+@app.route("/search_base")
+def search():
+    # 取得使用者輸入的關鍵字
+    keyword = request.args.get("keyword", "")
+    
+    db = firestore.client()
+    # 這裡抓取「電影2B」集合中所有的文件
+    # 注意：若電影數量超過數百部，建議使用 Firestore 的 where 查詢來優化
+    docs = db.collection("電影2B").stream()
+
+    results_html = ""
+    found_count = 0
+
+    for doc in docs:
+        movie = doc.to_dict()
+        # 檢查關鍵字是否在電影標題中 (包含搜尋)
+        if keyword in movie.get("title", ""):
+            found_count += 1
+            results_html += f"""
+                <div style="border: 1px solid #ddd; padding: 10px; margin: 10px; border-radius: 8px;">
+                    <img src="{movie['picture']}" style="width: 120px; float: left; margin-right: 15px;">
+                    <h4>{movie['title']}</h4>
+                    <p>上映日期：{movie['showDate']}</p>
+                    <a href="{movie['hyperlink']}" target="_blank">點我查看詳情</a>
+                    <div style="clear: both;"></div>
+                </div>
+            """
+
+    # 組合搜尋頁面的外殼
+    html_layout = f"""
+    <html>
+        <head><title>電影搜尋</title></head>
+        <body style="font-family: sans-serif; max-width: 800px; margin: auto;">
+            <h2>電影資料庫搜尋</h2>
+            <form action="/search" method="GET">
+                <input type="text" name="keyword" value="{keyword}" placeholder="輸入電影名稱..." style="padding: 5px; width: 200px;">
+                <button type="submit">搜尋</button>
+            </form>
+            <hr>
+            <p>搜尋結果：找到 {found_count} 部電影</p>
+            {results_html if found_count > 0 else "<p>沒有找到符合的電影。</p>"}
+            <br>
+            <a href="/">回首頁</a>
+        </body>
+    </html>
+    """
+    return html_layout
 
 if __name__ == "__main__":
     app.run(debug=True)
