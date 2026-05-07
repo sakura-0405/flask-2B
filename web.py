@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, render_template_string
 import requests
 import urllib3
 from bs4 import BeautifulSoup
@@ -44,6 +44,7 @@ def index():
     link += "<a href=/get_moviesbase>爬取即將上映電影並存入資料庫</a><hr>"
     link += "<a href=/search>查詢資料庫內的電影</a><hr>"
     link += "<a href=/road>台中市十大肇事路口</a><hr>"
+    link += "<a href=/weather>台中市天氣和降雨機率</a><hr>"
     return link
 
 # --- 2. 靜態/簡單頁面 ---
@@ -281,7 +282,7 @@ def search():
     return html_layout
 
 @app.route("/road")
-def road(): # 變數名改為 spider_pu_course
+def road(): 
     Ro = "<h1>台中市十大肇事路口(113年10月)</h1><br>"
     url = "https://datacenter.taichung.gov.tw/swagger/OpenData/a1b899c0-511f-4e3d-b22b-814982a97e41"
     Data = requests.get(url)
@@ -291,5 +292,97 @@ def road(): # 變數名改為 spider_pu_course
         Ro += item["路口名稱"] + "，原因 : " + item["主要肇因"]  + "，件數" + item["總件數"] + "<br>"
     return Ro
 
+# 全台縣市與 API 代碼對照表 (F-D0047 系列)
+CITY_CODES = {
+    "臺北市": "F-D0047-061", "新北市": "F-D0047-069", "桃園市": "F-D0047-005",
+    "臺中市": "F-D0047-073", "臺南市": "F-D0047-077", "高雄市": "F-D0047-065",
+    "基隆市": "F-D0047-049", "新竹縣": "F-D0047-009", "新竹市": "F-D0047-053",
+    "苗栗縣": "F-D0047-013", "彰化縣": "F-D0047-017", "南投縣": "F-D0047-021",
+    "雲林縣": "F-D0047-025", "嘉義縣": "F-D0047-029", "嘉義市": "F-D0047-057",
+    "屏東縣": "F-D0047-033", "宜蘭縣": "F-D0047-001", "花蓮縣": "F-D0047-041",
+    "臺東縣": "F-D0047-037", "澎湖縣": "F-D0047-045", "金門縣": "F-D0047-085",
+    "連江縣": "F-D0047-081"
+}
+
+@app.route("/weather")
+def weather():
+    target_city = request.args.get("city", "臺中市")
+    city_code = CITY_CODES.get(target_city, "F-D0047-073")
+    
+    # 修改處：從環境變數讀取 CWA_TOKEN
+    token = os.environ.get("CWA_TOKEN")
+    url = f"https://opendata.cwa.gov.tw/api/v1/rest/datastore/{city_code}?Authorization={token}"
+
+    response = requests.get(url)
+    data = response.json()
+    locations_root = data["records"]["Locations"][0]["Location"]
+
+    html_template = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+            body { font-family: "Microsoft JhengHei", sans-serif; background-color: #f0f2f5; padding: 20px; }
+            .container { max-width: 800px; margin: auto; background: white; padding: 25px; border-radius: 15px; box-shadow: 0 5px 20px rgba(0,0,0,0.1); }
+            .selector-section { text-align: center; margin-bottom: 30px; padding: 20px; background: #e8f0fe; border-radius: 10px; }
+            select { padding: 10px 20px; font-size: 16px; border-radius: 5px; border: 1px solid #ddd; outline: none; }
+            button { padding: 10px 20px; font-size: 16px; background: #1a73e8; color: white; border: none; border-radius: 5px; cursor: pointer; }
+            h2 { color: #1a73e8; text-align: center; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            th { background: #1a73e8; color: white; padding: 12px; }
+            td { padding: 12px; border-bottom: 1px solid #eee; text-align: center; }
+            .temp { color: #e67e22; font-weight: bold; }
+            .rain-high { color: #d93025; font-weight: bold; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="selector-section">
+                <form action="/weather" method="get">
+                    <label>選擇縣市：</label>
+                    <select name="city">
+                        {% for city in city_list %}
+                        <option value="{{ city }}" {% if city == current_city %}selected{% endif %}>{{ city }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit">查詢</button>
+                </form>
+            </div>
+            <h2>📍 {{ current_city }} 各區天氣預報</h2>
+            <table>
+                <tr><th>區域</th><th>天氣</th><th>氣溫</th><th>降雨機率</th></tr>
+                {% for item in weather_data %}
+                <tr>
+                    <td><strong>{{ item.district }}</strong></td>
+                    <td>{{ item.wx }}</td>
+                    <td class="temp">{{ item.temp }}°C</td>
+                    <td class="{{ 'rain-high' if item.rain_prob|int >= 30 else '' }}">{{ item.rain_prob }}%</td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+    </body>
+    </html>
+    """
+
+    weather_data = []
+    for loc in locations_root:
+        district = loc.get("LocationName", "未知")
+        wx, rain_prob, temp = "無資料", "0", "--"
+        for element in loc.get("WeatherElement", []):
+            ename = element.get("ElementName")
+            val_obj = element["Time"][0]["ElementValue"][0]
+            if ename in ["天氣現象", "天氣", "Weather"]:
+                wx = val_obj.get("Weather", val_obj.get("value", "未知"))
+            elif ename in ["降雨機率", "ProbabilityOfPrecipitation"]:
+                rain_prob = val_obj.get("ProbabilityOfPrecipitation", val_obj.get("value", "0"))
+            elif ename in ["溫度", "Temperature"]:
+                temp = val_obj.get("Temperature", val_obj.get("value", "--"))
+        weather_data.append({"district": district, "wx": wx, "rain_prob": rain_prob, "temp": temp})
+
+    return render_template_string(html_template, weather_data=weather_data, city_list=list(CITY_CODES.keys()), current_city=target_city)
+
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run()
