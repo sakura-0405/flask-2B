@@ -43,6 +43,7 @@ def index():
     link += "<a href=/get_movies>爬取即將上映電影</a><hr>"
     link += "<a href=/get_moviesbase>爬取即將上映電影並存入資料庫</a><hr>"
     link += "<a href=/search>查詢資料庫內的電影</a><hr>"
+    link += "<a href=/road>台中市十大肇事路口</a><hr>"
     return link
 
 # --- 2. 靜態/簡單頁面 ---
@@ -278,6 +279,17 @@ def search():
     </html>
     """
     return html_layout
+
+@app.route("/road")
+def road(): # 變數名改為 spider_pu_course
+    Ro = "<h1>台中市十大肇事路口(113年10月)</h1><br>"
+    url = "https://datacenter.taichung.gov.tw/swagger/OpenData/a1b899c0-511f-4e3d-b22b-814982a97e41"
+    Data = requests.get(url)
+
+    JsonData = json.loads(Data.text)
+    for item in JsonData:
+        Ro += item["路口名稱"] + "，原因 : " + item["主要肇因"]  + "，件數" + item["總件數"] + "<br>"
+    return Ro
 
 if __name__ == "__main__":
     app.run(debug=True)
