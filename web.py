@@ -50,16 +50,32 @@ def index():
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    # build a request object
+    # 建立 request 物件
     req = request.get_json(force=True)
-    # fetch queryResult from json
-    action =  req["queryResult"]["action"]
-    #msg =  req["queryResult"]["queryText"]
-    #info = "我是徐瑞穎設計的機器人，動作：" + action + "； 查詢內容：" + msg
-    if(action == "rateChoice"):
-        rate = req.get("queryResult").get("parameters").get("rate")
-        info = "我是徐瑞穎設計的機器人，你選擇的電影分級是 :" + rate
-    return make_response(jsonify({"fulfillmentText": info}))
+    
+    # 獲取 action
+    action = req.get("queryResult").get("action")
+    
+    # 預設回覆，防止 info 在條件不成立時未定義
+    info = "抱歉，我暫時無法處理您的請求。"
+
+    if action == "rateChoice":
+        # 使用 .get() 鏈式調用更安全，防止 Key 缺失導致 500 錯誤
+        parameters = req.get("queryResult", {}).get("parameters", {})
+        rate = parameters.get("rate")
+        
+        if rate:
+            info = f"我是徐瑞穎設計的機器人，你選擇的電影分級是: {rate}"
+        else:
+            info = "我是徐瑞穎設計的機器人，但我沒有偵測到電影分級參數。"
+
+    # 建構符合 Dialogflow V2 規格的 Response
+    res = {
+        "fulfillmentText": info,
+        "source": "webhook"
+    }
+
+    return make_response(jsonify(res))
 
 
 # --- 2. 靜態/簡單頁面 ---
