@@ -46,7 +46,6 @@ def index():
     link += "<a href=/road>台中市十大肇事路口</a><hr>"
     link += "<a href=/weather>台中市天氣和降雨機率</a><hr>"
     link += "<a href=/rate>本周新片進DB</a><hr>"
-    link += "<a href=/webhook>webhook</a><hr>"
     return link
 
 app.route("/webhook", methods=["POST"])
@@ -54,9 +53,9 @@ def webhook():
     # build a request object
     req = request.get_json(force=True)
     # fetch queryResult from json
-    action =  req.get("queryResult").get("action")
-    msg =  req.get("queryResult").get("queryText")
-    info = "動作：" + action + "； 查詢內容：" + msg
+    action =  req["queryResult"]["action"]
+    msg =  req["queryResult"]["queryText"]
+    info = "我是徐瑞穎設計的機器人，動作：" + action + "； 查詢內容：" + msg
     return make_response(jsonify({"fulfillmentText": info}))
 
 
