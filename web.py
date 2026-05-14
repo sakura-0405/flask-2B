@@ -48,52 +48,57 @@ def index():
     link += "<a href=/rate>本周新片進DB</a><hr>"
     return link
 
+# --- 在 webhook 函式上方修正 get_movies_by_rate ---
+
 def get_movies_by_rate(user_rate):
     try:
-        # 指向集合：本週新片含分級
+        # 關鍵：在函式內取得 firestore client
+        db = firestore.client() 
         collection_ref = db.collection("本週新片含分級")
         
-        # 查詢語法：尋找欄位 rate 等於使用者選擇的分級
+        # 查詢符合分級的所有文件
         query = collection_ref.where("rate", "==", user_rate).stream()
         
         results = []
         for doc in query:
             movie_data = doc.to_dict()
             name = movie_data.get("title", "未知電影")
-            intro = movie_data.get("introduce", "暫無介紹")
-            # 這裡可以根據需要增加更多資訊，例如 showDate
-            results.append(f"🎬 【{name}】\n📝 介紹：{intro[:50]}...") # 簡介取前50字避免過長
+            # 這裡我們只抓片名，避免對話內容過長
+            results.append(f"🎬 {name}")
         
         if results:
-            content = "\n\n".join(results)
-            return f"為您找到分級為「{user_rate}」的本週新片：\n\n{content}"
+            content = "\n".join(results)
+            return f"為您找到「{user_rate}」的本週新片有：\n{content}"
         else:
-            return f"目前在資料庫中找不到分級為「{user_rate}」的電影喔！"
+            return f"目前資料庫中找不到分級為「{user_rate}」的電影喔。"
             
     except Exception as e:
-        return f"資料庫連線失敗，請檢查設定。錯誤原因：{str(e)}"
+        return f"資料庫查詢發生錯誤：{str(e)}"
 
+# --- Webhook 路由部分 ---
 @app.route("/webhook", methods=["POST"])
 def webhook():
+    # 建立 request 物件
     req = request.get_json(force=True)
     
-    # 取得 Dialogflow 傳來的動作名稱
+    # 獲取 Dialogflow 傳來的動作名稱
     action = req.get("queryResult").get("action")
     
-    # 預設回覆
-    info = "我是機器人，收到動作：" + str(action)
+    # 預設回覆（如果沒有比對到 action）
+    info = "我是徐瑞穎設計的機器人，我收到了動作：" + str(action)
 
     if action == "rateChoice":
-        # 取得使用者選擇的分級參數
+        # 從 parameters 抓取電影分級 (對應 Dialogflow 的 Entity 名稱)
         parameters = req.get("queryResult", {}).get("parameters", {})
         user_rate = parameters.get("rate")
         
         if user_rate:
-            # 執行資料庫查詢
+            # 呼叫資料庫查詢函式並取得結果文字
             info = get_movies_by_rate(user_rate)
         else:
-            info = "我收到了您的請求，但沒抓到分級參數，請再試一次。"
+            info = "請告訴我你想查詢哪種分級的電影（例如：普遍級、保護級）。"
 
+    # 回傳給 Dialogflow 的 JSON 格式
     return make_response(jsonify({"fulfillmentText": info}))
 
 
