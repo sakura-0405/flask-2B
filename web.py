@@ -48,49 +48,53 @@ def index():
     link += "<a href=/rate>本周新片進DB</a><hr>"
     return link
 
+def get_movies_by_rate(user_rate):
+    try:
+        # 指向集合：本週新片含分級
+        collection_ref = db.collection("本週新片含分級")
+        
+        # 查詢語法：尋找欄位 rate 等於使用者選擇的分級
+        query = collection_ref.where("rate", "==", user_rate).stream()
+        
+        results = []
+        for doc in query:
+            movie_data = doc.to_dict()
+            name = movie_data.get("title", "未知電影")
+            intro = movie_data.get("introduce", "暫無介紹")
+            # 這裡可以根據需要增加更多資訊，例如 showDate
+            results.append(f"🎬 【{name}】\n📝 介紹：{intro[:50]}...") # 簡介取前50字避免過長
+        
+        if results:
+            content = "\n\n".join(results)
+            return f"為您找到分級為「{user_rate}」的本週新片：\n\n{content}"
+        else:
+            return f"目前在資料庫中找不到分級為「{user_rate}」的電影喔！"
+            
+    except Exception as e:
+        return f"資料庫連線失敗，請檢查設定。錯誤原因：{str(e)}"
+
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    try:
-        # 1. 取得 Dialogflow 傳來的 JSON
-        req = request.get_json(force=True)
-        query_result = req.get("queryResult", {})
-        
-        # 2. 取得動作與參數
-        # 確保這裡的 "Rate" 跟你在 Dialogflow Entity 的命名完全一致
-        params = query_result.get("parameters", {})
-        target_rate = params.get("Rate") 
-        
-        action = query_result.get("action")
-        msg = query_result.get("queryText")
+    req = request.get_json(force=True)
+    
+    # 取得 Dialogflow 傳來的動作名稱
+    action = req.get("queryResult").get("action")
+    
+    # 預設回覆
+    info = "我是機器人，收到動作：" + str(action)
 
-        # 3. 邏輯判斷
-        if target_rate:
-            # 連結 Firestore 查詢對應分級的電影
-            db = firestore.client()
-            # 注意：這裡的集合名稱 "本週新片含分級" 需與你 /rate 路由存入時一致
-            collection_ref = db.collection("本週新片含分級")
-            docs = collection_ref.where("rate", "==", target_rate).get()
-            
-            movie_list = []
-            for doc in docs:
-                movie_data = doc.to_dict()
-                movie_list.append(movie_data.get("title"))
-
-            if movie_list:
-                titles = "、".join(movie_list)
-                info = f"我是徐瑞穎設計的機器人。目前【{target_rate}】的電影有：{titles}。請問還有什麼想了解的嗎？"
-            else:
-                info = f"我是徐瑞穎設計的機器人。目前資料庫中暫時沒有【{target_rate}】的電影喔！"
+    if action == "rateChoice":
+        # 取得使用者選擇的分級參數
+        parameters = req.get("queryResult", {}).get("parameters", {})
+        user_rate = parameters.get("rate")
+        
+        if user_rate:
+            # 執行資料庫查詢
+            info = get_movies_by_rate(user_rate)
         else:
-            # 如果 Dialogflow 沒偵測到 Rate 參數
-            info = f"我是徐瑞穎設計的機器人。收到您的訊息：『{msg}』，但我沒有偵測到電影分級參數（如：G級、普遍級），請再試一次。"
+            info = "我收到了您的請求，但沒抓到分級參數，請再試一次。"
 
-        # 4. 回傳給 Dialogflow
-        return jsonify({"fulfillmentText": info})
-
-    except Exception as e:
-        # 除錯用：如果後端報錯，會直接在 Dialogflow 看到原因
-        return jsonify({"fulfillmentText": f"後端處理發生錯誤：{str(e)}"})
+    return make_response(jsonify({"fulfillmentText": info}))
 
 
 # --- 2. 靜態/簡單頁面 ---
