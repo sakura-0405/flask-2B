@@ -50,32 +50,47 @@ def index():
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    # 建立 request 物件
-    req = request.get_json(force=True)
-    
-    # 獲取 action
-    action = req.get("queryResult").get("action")
-    
-    # 預設回覆，防止 info 在條件不成立時未定義
-    info = "抱歉，我暫時無法處理您的請求。"
-
-    if action == "rateChoice":
-        # 使用 .get() 鏈式調用更安全，防止 Key 缺失導致 500 錯誤
-        parameters = req.get("queryResult", {}).get("parameters", {})
-        rate = parameters.get("rate")
+    try:
+        # 1. 取得 Dialogflow 傳來的 JSON
+        req = request.get_json(force=True)
+        query_result = req.get("queryResult", {})
         
-        if rate:
-            info = f"我是徐瑞穎設計的機器人，你選擇的電影分級是: {rate}"
+        # 2. 取得動作與參數
+        # 確保這裡的 "Rate" 跟你在 Dialogflow Entity 的命名完全一致
+        params = query_result.get("parameters", {})
+        target_rate = params.get("Rate") 
+        
+        action = query_result.get("action")
+        msg = query_result.get("queryText")
+
+        # 3. 邏輯判斷
+        if target_rate:
+            # 連結 Firestore 查詢對應分級的電影
+            db = firestore.client()
+            # 注意：這裡的集合名稱 "本週新片含分級" 需與你 /rate 路由存入時一致
+            collection_ref = db.collection("本週新片含分級")
+            docs = collection_ref.where("rate", "==", target_rate).get()
+            
+            movie_list = []
+            for doc in docs:
+                movie_data = doc.to_dict()
+                movie_list.append(movie_data.get("title"))
+
+            if movie_list:
+                titles = "、".join(movie_list)
+                info = f"我是徐瑞穎設計的機器人。目前【{target_rate}】的電影有：{titles}。請問還有什麼想了解的嗎？"
+            else:
+                info = f"我是徐瑞穎設計的機器人。目前資料庫中暫時沒有【{target_rate}】的電影喔！"
         else:
-            info = "我是徐瑞穎設計的機器人，但我沒有偵測到電影分級參數。"
+            # 如果 Dialogflow 沒偵測到 Rate 參數
+            info = f"我是徐瑞穎設計的機器人。收到您的訊息：『{msg}』，但我沒有偵測到電影分級參數（如：G級、普遍級），請再試一次。"
 
-    # 建構符合 Dialogflow V2 規格的 Response
-    res = {
-        "fulfillmentText": info,
-        "source": "webhook"
-    }
+        # 4. 回傳給 Dialogflow
+        return jsonify({"fulfillmentText": info})
 
-    return make_response(jsonify(res))
+    except Exception as e:
+        # 除錯用：如果後端報錯，會直接在 Dialogflow 看到原因
+        return jsonify({"fulfillmentText": f"後端處理發生錯誤：{str(e)}"})
 
 
 # --- 2. 靜態/簡單頁面 ---
