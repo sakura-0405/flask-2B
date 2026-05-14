@@ -78,28 +78,40 @@ def get_movies_by_rate(user_rate):
 # --- Webhook 路由部分 ---
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    # 建立 request 物件
-    req = request.get_json(force=True)
-    
-    # 獲取 Dialogflow 傳來的動作名稱
-    action = req.get("queryResult").get("action")
-    
-    # 預設回覆（如果沒有比對到 action）
-    info = "我是徐瑞穎設計的機器人，我收到了動作：" + str(action)
-
-    if action == "rateChoice":
-        # 從 parameters 抓取電影分級 (對應 Dialogflow 的 Entity 名稱)
-        parameters = req.get("queryResult", {}).get("parameters", {})
-        user_rate = parameters.get("rate")
+    try:
+        req = request.get_json(force=True)
+        query_result = req.get("queryResult", {})
+        params = query_result.get("parameters", {})
         
-        if user_rate:
-            # 呼叫資料庫查詢函式並取得結果文字
-            info = get_movies_by_rate(user_rate)
-        else:
-            info = "請告訴我你想查詢哪種分級的電影（例如：普遍級、保護級）。"
+        # 嘗試抓取 Rate 參數
+        target_rate = params.get("Rate") 
+        
+        # --- Debug 邏輯 ---
+        # 如果 target_rate 是空的，把收到的參數清單印出來看
+        if not target_rate:
+            param_keys = list(params.keys())
+            debug_info = f"（偵測到的參數有：{param_keys}）" if param_keys else "（未偵測到任何參數）"
+            info = f"我是徐瑞穎設計的機器人。請告訴我想查詢哪種分級的電影 {debug_info}。"
+            return jsonify({"fulfillmentText": info})
+        # -----------------
 
-    # 回傳給 Dialogflow 的 JSON 格式
-    return make_response(jsonify({"fulfillmentText": info}))
+        # 連結 Firestore 查詢
+        db = firestore.client()
+        collection_ref = db.collection("本週新片含分級")
+        docs = collection_ref.where("rate", "==", target_rate).get()
+        
+        movie_list = [doc.to_dict().get("title") for doc in docs]
+
+        if movie_list:
+            titles = "、".join(movie_list)
+            info = f"我是徐瑞穎設計的機器人。目前【{target_rate}】的電影有：{titles}。"
+        else:
+            info = f"我是徐瑞穎設計的機器人。目前資料庫中沒有【{target_rate}】的電影。"
+
+        return jsonify({"fulfillmentText": info})
+
+    except Exception as e:
+        return jsonify({"fulfillmentText": f"後端錯誤：{str(e)}"})
 
 
 # --- 2. 靜態/簡單頁面 ---
