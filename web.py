@@ -58,7 +58,7 @@ def webhook():
     #info = "我是徐瑞穎設計的機器人，動作：" + action + "； 查詢內容：" + msg
     if(action == "rateChoice"):
         rate = req.get("queryResult").get("parameters").get("rate")
-        info = "你選擇的電影分級是 :" + rate
+        info = "我是徐瑞穎設計的機器人，你選擇的電影分級是 :" + rate
     return make_response(jsonify({"fulfillmentText": info}))
 
 
