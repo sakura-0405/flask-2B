@@ -46,6 +46,7 @@ def index():
     link += "<a href=/road>台中市十大肇事路口</a><hr>"
     link += "<a href=/weather>台中市天氣和降雨機率</a><hr>"
     link += "<a href=/rate>本周新片進DB</a><hr>"
+    link += "<a href=/webdemo>聊天機器人</a><hr>"
     return link
 
 # --- 在 webhook 函式上方修正 get_movies_by_rate ---
@@ -127,6 +128,10 @@ def show_today(): # 變數名改為 show_today
 @app.route("/me")
 def about_me(): # 變數名改為 about_me
     return render_template("mis2B.html")
+
+@app.route("/webdemo")
+def webdemo():
+    return render_template("webdemo.html")
 
 # --- 3. 傳值與計算 ---
 @app.route("/welcome", methods=["GET"])
