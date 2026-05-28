@@ -57,7 +57,6 @@ def get_movies_by_rate(user_rate: str) -> str:
     """
     try:
         db = firestore.client() 
-        # 💡 請確保你的資料庫真的有「本週新片含分級」這個 Collection
         collection_ref = db.collection("本週新片含分級")
         query = collection_ref.where("rate", "==", user_rate).stream()
         
@@ -100,11 +99,12 @@ def webhook():
         # 判定是否要開啟純聊天/接梗模式 (Fallback 或 Welcome)
         if action == "input.unknown" or "Fallback" in intent_name or "Welcome" in intent_name:
             system_instruction = (
-                "你是徐瑞穎設計的 AI 助理。目前使用者跟你聊一些日常八卦、打招呼、或是奇奇怪怪的話題。\n"
-                "請展現你的高情商與幽默感，熱情地接梗、陪使用者天南地北地聊天！不需要硬扯回電影，有趣好玩最重要！"
+                "你是靜宜大學資訊管理系學生徐瑞穎開發的 AI 助理。\n"
+                "目前使用者觸發了聊天或未知模式，輸入的內容是：「" + user_query + "」。\n"
+                "請展現你的高情商與幽默感，針對使用者的輸入給出具體、熱情且有趣的回答。如果提到靜宜資管，請大力稱讚並介紹其特色！不需要硬扯回電影。"
             )
         else:
-            # 正常觸發「影片」Intent 時的設定
+            # 正常觸發電影相關 Intent 時的設定
             system_instruction = (
                 "你是徐瑞穎設計的電影推薦機器人助理。你非常有智慧、幽默且親切。\n"
                 "當使用者詢問關於特定電影分級（如普遍級、保護級、限制級等）時，你必須且只能調用 `get_movies_by_rate` 工具來取得最新的資料庫電影名單，並以此回答。"
@@ -125,7 +125,7 @@ def webhook():
 
         bot_reply = response.text
         if not bot_reply:
-            bot_reply = "恩恩！聽起來很有意思。還有什麼想跟我聊聊的嗎？"
+            bot_reply = "嗯嗯！聽起來很有意思。關於這個話題，你有什麼特別的想法嗎？"
 
         return jsonify({
             "fulfillmentText": bot_reply,
@@ -453,4 +453,4 @@ def weather():
     return render_template_string(html_template, weather_data=weather_data, current_city=target_city)
 
 if __name__ == "__main__":
-    app.run(debug=True) 
+    app.run(debug=True)
