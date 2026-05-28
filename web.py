@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, render_template_string, make_response, jsonify
 from google import genai
+from google.genai import types
 import requests
 import urllib3
 from bs4 import BeautifulSoup
@@ -51,11 +52,18 @@ def index():
     link += "<a href=/AI>AI</a><hr>"    
     return link
 
-# --- 在 webhook 函式上方修正 get_movies_by_rate ---
 
-def get_movies_by_rate(user_rate):
+
+# --- 1. 定義供 Gemini 調用的 Tool 函式 ---
+def get_movies_by_rate(user_rate: str) -> str:
+    """
+    根據使用者指定或提及的電影分級（如：普遍級、保護級、輔12級、輔15級、限制級），從資料庫查詢本週對應分級的新片清單。
+    
+    Args:
+        user_rate: 電影分級名稱（例如 "普遍級"、"保護級"、"限制級"）
+    """
     try:
-        # 關鍵：在函式內取得 firestore client
+        # 取得 firestore client
         db = firestore.client() 
         collection_ref = db.collection("本週新片含分級")
         
@@ -66,52 +74,62 @@ def get_movies_by_rate(user_rate):
         for doc in query:
             movie_data = doc.to_dict()
             name = movie_data.get("title", "未知電影")
-            # 這裡我們只抓片名，避免對話內容過長
             results.append(f"🎬 {name}")
         
         if results:
-            content = "\n".join(results)
-            return f"為您找到「{user_rate}」的本週新片有：\n{content}"
+            content = "、".join(results)
+            return f"為您找到「{user_rate}」的本週新片有：{content}"
         else:
             return f"目前資料庫中找不到分級為「{user_rate}」的電影喔。"
             
     except Exception as e:
         return f"資料庫查詢發生錯誤：{str(e)}"
 
-# --- Webhook 路由部分 ---
+client = genai.Client()
+
+# --- 2. Webhook 路由部分 ---
 @app.route("/webhook", methods=["POST"])
 def webhook():
     try:
         req = request.get_json(force=True)
         query_result = req.get("queryResult", {})
-        params = query_result.get("parameters", {})
         
-        # 嘗試抓取 Rate 參數
-        target_rate = params.get("Rate") 
+        # 1. 優先抓取使用者實際輸入的文字（不論 Dialogflow 有沒有辨識出參數，都丟給 Gemini 判斷）
+        user_query = query_result.get("queryText", "")
         
-        # --- Debug 邏輯 ---
-        # 如果 target_rate 是空的，把收到的參數清單印出來看
-        if not target_rate:
-            param_keys = list(params.keys())
-            debug_info = f"（偵測到的參數有：{param_keys}）" if param_keys else "（未偵測到任何參數）"
-            info = f"我是徐瑞穎設計的機器人。請告訴我想查詢哪種分級的電影 {debug_info}。"
-            return jsonify({"fulfillmentText": info})
-        # -----------------
+        if not user_query:
+            return jsonify({"fulfillmentText": "我是徐瑞穎設計的機器人。請問今天想聊聊什麼電影呢？"})
 
-        # 連結 Firestore 查詢
-        db = firestore.client()
-        collection_ref = db.collection("本週新片含分級")
-        docs = collection_ref.where("rate", "==", target_rate).get()
-        
-        movie_list = [doc.to_dict().get("title") for doc in docs]
+        # 2. 設定給 Gemini 的系統指令（System Instruction），規範角色扮演
+        system_instruction = (
+            "你是徐瑞穎設計的電影推薦機器人助理。請用親切、專業的語氣回答使用者的問題。"
+            "如果使用者詢問特定分級的電影，請務必使用 `get_movies_by_rate` 工具來查詢即時資料庫。"
+            "如果是其他複雜的電影觀念、劇情討論、或是日常對話，請直接發揮你的 AI 知識庫回答。"
+        )
 
-        if movie_list:
-            titles = "、".join(movie_list)
-            info = f"我是徐瑞穎設計的機器人。目前【{target_rate}】的電影有：{titles}。"
-        else:
-            info = f"我是徐瑞穎設計的機器人。目前資料庫中沒有【{target_rate}】的電影。"
+        # 3. 呼叫 Gemini API (支援 Function Calling / Tools)
+        # 這裡會自動判斷使用者的 user_query 是否需要去執行 get_movies_by_rate
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=user_query,
+            config=types.GenerateContentConfig(
+                system_instruction=system_instruction,
+                # 將你的 Python 函式作為工具傳給 Gemini
+                tools=[get_movies_by_rate],
+                # 讓模型自動決定要直接回答還是呼叫工具
+                tool_config=types.ToolConfig(
+                    function_calling_config=types.FunctionCallingConfig(
+                        mode=types.FunctionCallingMode.AUTO
+                    )
+                )
+            )
+        )
 
-        return jsonify({"fulfillmentText": info})
+        # 4. 取得 Gemini 最終產出的回覆文字
+        bot_reply = response.text
+
+        # 5. 回傳給 Dialogflow 展現給使用者
+        return jsonify({"fulfillmentText": bot_reply})
 
     except Exception as e:
         return jsonify({"fulfillmentText": f"後端錯誤：{str(e)}"})
