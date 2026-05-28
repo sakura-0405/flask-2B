@@ -52,7 +52,7 @@ def index():
     link += "<a href=/AI>AI</a><hr>"    
     return link
 
-
+client = genai.Client()
 
 # --- 1. 定義供 Gemini 調用的 Tool 函式 ---
 def get_movies_by_rate(user_rate: str) -> str:
@@ -85,7 +85,6 @@ def get_movies_by_rate(user_rate: str) -> str:
     except Exception as e:
         return f"資料庫查詢發生錯誤：{str(e)}"
 
-client = genai.Client()
 
 # --- 2. Webhook 路由部分 ---
 @app.route("/webhook", methods=["POST"])
@@ -94,32 +93,30 @@ def webhook():
         req = request.get_json(force=True)
         query_result = req.get("queryResult", {})
         
-        # 1. 優先抓取使用者實際輸入的文字（不論 Dialogflow 有沒有辨識出參數，都丟給 Gemini 判斷）
+        # 1. 優先抓取使用者實際輸入的文字
         user_query = query_result.get("queryText", "")
         
         if not user_query:
             return jsonify({"fulfillmentText": "我是徐瑞穎設計的機器人。請問今天想聊聊什麼電影呢？"})
 
-        # 2. 設定給 Gemini 的系統指令（System Instruction），規範角色扮演
+        # 2. 設定給 Gemini 的系統指令（System Instruction）
         system_instruction = (
             "你是徐瑞穎設計的電影推薦機器人助理。請用親切、專業的語氣回答使用者的問題。"
             "如果使用者詢問特定分級的電影，請務必使用 `get_movies_by_rate` 工具來查詢即時資料庫。"
             "如果是其他複雜的電影觀念、劇情討論、或是日常對話，請直接發揮你的 AI 知識庫回答。"
         )
 
-        # 3. 呼叫 Gemini API (支援 Function Calling / Tools)
-        # 這裡會自動判斷使用者的 user_query 是否需要去執行 get_movies_by_rate
+        # 3. 呼叫 Gemini API (修正後的 ToolConfig 寫法)
         response = client.models.generate_content(
             model='gemini-2.5-flash',
             contents=user_query,
             config=types.GenerateContentConfig(
                 system_instruction=system_instruction,
-                # 將你的 Python 函式作為工具傳給 Gemini
                 tools=[get_movies_by_rate],
-                # 讓模型自動決定要直接回答還是呼叫工具
+                # 這裡直接傳入字串 "AUTO"，或是使用最新的 SDK 結構
                 tool_config=types.ToolConfig(
                     function_calling_config=types.FunctionCallingConfig(
-                        mode=types.FunctionCallingMode.AUTO
+                        mode="AUTO"  # 修正處：直接使用字串常數避免屬性錯誤
                     )
                 )
             )
@@ -133,7 +130,6 @@ def webhook():
 
     except Exception as e:
         return jsonify({"fulfillmentText": f"後端錯誤：{str(e)}"})
-
 
 # --- 2. 靜態/簡單頁面 ---
 @app.route("/mis")
