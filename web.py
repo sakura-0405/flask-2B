@@ -116,7 +116,7 @@ def webhook():
 
         # 呼叫 Gemini API
         response = client.models.generate_content(
-            model='gemini-2.5-flash',
+            model='gemini-3.5-flash',
             contents=user_query,
             config=types.GenerateContentConfig(
                 system_instruction=system_instruction,
