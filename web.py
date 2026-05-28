@@ -46,6 +46,7 @@ def index():
     link += "<a href=/weather>台中市天氣和降雨機率</a><hr>"
     link += "<a href=/rate>本周新片進DB</a><hr>"
     link += "<a href=/webdemo>聊天機器人</a><hr>"
+    link += "<a href=/webdemo7>聊天機器人2</a><hr>"
     link += "<a href=/AI>AI</a><hr>"    
     return link
 
