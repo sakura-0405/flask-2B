@@ -52,7 +52,6 @@ def index():
     link += "<a href=/AI>AI</a><hr>"    
     return link
 
-client = genai.Client()
 
 # --- 1. 定義供 Gemini 調用的 Tool 函式 ---
 def get_movies_by_rate(user_rate: str) -> str:
@@ -90,16 +89,24 @@ def get_movies_by_rate(user_rate: str) -> str:
 @app.route("/webhook", methods=["POST"])
 def webhook():
     try:
+        # 確保在函式內部抓取環境變數，防止 Vercel 啟動時生命週期錯誤
+        api_key = os.environ.get("GEMINI_API_KEY", "")
+        if not api_key:
+            return jsonify({"fulfillmentText": "後端錯誤：未設定 GEMINI_API_KEY 環境變數。"})
+            
+        # 安全初始化 client
+        client = genai.Client(api_key=api_key)
+
         req = request.get_json(force=True)
         query_result = req.get("queryResult", {})
         
-        # 優先抓取使用者實際輸入的文字（如：「我想要帶你去浪漫的土耳其」）
+        # 優先抓取使用者實際輸入的文字
         user_query = query_result.get("queryText", "")
         
         if not user_query:
             return jsonify({"fulfillmentText": "我是徐瑞穎設計的機器人。請問今天想聊聊什麼電影呢？"})
 
-        # 設定給 Gemini 的系統指令，賦予它幽默、彈性的靈魂，同時顧及主要功能
+        # 設定給 Gemini 的系統指令
         system_instruction = (
             "你是徐瑞穎設計的電影推薦機器人助理。你非常有智慧、幽默且親切。\n"
             "1. 如果使用者詢問特定電影分級，請務必調用 `get_movies_by_rate` 工具查詢資料庫。\n"
@@ -125,43 +132,54 @@ def webhook():
         # 取得 Gemini 最終產出的回覆文字
         bot_reply = response.text
 
-        # 如果 Gemini 回覆為空（極少見），給予一個安全回覆
         if not bot_reply:
             bot_reply = "哎呀，這問題太有趣了，讓我想想該怎麼接梗！"
 
-        return jsonify({"fulfillmentText": bot_reply})
+        # 回傳標準 Dialogflow 格式
+        return jsonify({
+            "fulfillmentText": bot_reply,
+            "fulfillmentMessages": [
+                {
+                    "text": {
+                        "text": [bot_reply]
+                    }
+                }
+            ]
+        })
 
     except Exception as e:
-        return jsonify({"fulfillmentText": f"後端錯誤：{str(e)}"})
+        return jsonify({"fulfillmentText": f"後端 Webhook 發生錯誤：{str(e)}"})
+
 
 # --- 2. 靜態/簡單頁面 ---
 @app.route("/mis")
-def course_info(): # 變數名改為 course_info
+def course_info(): 
     return "<h1>資訊管理導論</h1><a href=/>返回首頁</a>"
 
 @app.route("/today")
-def show_today(): # 變數名改為 show_today
+def show_today(): 
     now = datetime.now()
     return render_template("today.html", datetime=str(now))
 
 @app.route("/me")
-def about_me(): # 變數名改為 about_me
+def about_me(): 
     return render_template("mis2B.html")
 
 @app.route("/webdemo")
 def webdemo():
     return render_template("webdemo.html")
 
+
 # --- 3. 傳值與計算 ---
 @app.route("/welcome", methods=["GET"])
-def welcome_user(): # 變數名改為 welcome_user
+def welcome_user(): 
     user = request.args.get("u")
     d = request.args.get("d")
     c = request.args.get("c")
     return render_template("welcome.html", name=user, dep=d, course=c)
 
 @app.route("/account", methods=["GET", "POST"])
-def handle_account(): # 變數名改為 handle_account
+def handle_account(): 
     if request.method == "POST":
         user = request.form.get("user")
         pwd = request.form.get("pwd")
@@ -170,7 +188,7 @@ def handle_account(): # 變數名改為 handle_account
     return render_template("account.html")
 
 @app.route("/math", methods=["GET", "POST"])
-def calculate_math(): # 變數名改為 calculate_math
+def calculate_math(): 
     result = ""
     if request.method == "POST":
         try:
@@ -191,9 +209,10 @@ def calculate_math(): # 變數名改為 calculate_math
             result = "請輸入有效的數字"
     return render_template("math.html", final_result=result)
 
+
 # --- 4. Firestore 資料讀取 ---
 @app.route("/read")
-def read_firestore_all(): # 變數名改為 read_firestore_all
+def read_firestore_all(): 
     output = ""
     db = firestore.client()
     collection_ref = db.collection("靜宜資管")    
@@ -203,7 +222,7 @@ def read_firestore_all(): # 變數名改為 read_firestore_all
     return output
 
 @app.route("/ready")
-def search_teacher(): # 變數名改為 search_teacher
+def search_teacher(): 
     keyword = request.args.get("keyword", "").strip()
     db = firestore.client()
     collection_ref = db.collection("靜宜資管")
@@ -218,9 +237,10 @@ def search_teacher(): # 變數名改為 search_teacher
     
     return render_template("search.html", keyword=keyword, results=teachers_found)
 
+
 # --- 5. 爬蟲部分 ---
 @app.route("/spider_course")
-def spider_pu_course(): # 變數名改為 spider_pu_course
+def spider_pu_course(): 
     info = ""
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
     url = "https://www1.pu.edu.tw/~tcyang/course.html"
@@ -234,7 +254,6 @@ def spider_pu_course(): # 變數名改為 spider_pu_course
 
 @app.route("/get_movies")
 def movie_crawler():
-    # 1. 取得使用者輸入的關鍵字 (例如: /get_movies?keyword=英雄)
     keyword = request.args.get("keyword", "").strip()
     
     html_output = f"<h1>即將上映電影查詢</h1>"
@@ -260,7 +279,6 @@ def movie_crawler():
             if link_tag and img_tag:
                 title = img_tag.get("alt", "")
                 
-                # 2. 關鍵字過濾邏輯：如果關鍵字不在片名中，就跳過這一個
                 if keyword and keyword not in title:
                     continue
                 
@@ -270,7 +288,6 @@ def movie_crawler():
                 if not img_src.startswith("http"):
                     img_src = "https://www.atmovies.com.tw" + img_src
 
-                # 3. 拼接符合條件的 HTML
                 html_output += f'<a href="{introduce}"><b>{title}</b></a><br>'
                 html_output += f'<img src="{img_src}" style="max-width:200px;"><br><br>'
                 found_count += 1
@@ -286,16 +303,13 @@ def movie_crawler():
 
 @app.route("/rate")
 def rate():
-    #本週新片
     url = "https://www.atmovies.com.tw/movie/new/"
     Data = requests.get(url)
     Data.encoding = "utf-8"
     sp = BeautifulSoup(Data.text, "html.parser")
     lastUpdate = sp.find(class_="smaller09").text[5:]
-    print(lastUpdate)
-    print()
 
-    result=sp.select(".filmList")
+    result = sp.select(".filmList")
 
     for x in result:
         title = x.find("a").text
@@ -349,7 +363,6 @@ def rate():
 @app.route("/get_moviesbase")
 def movie_base():
     R = ""
-
     db = firestore.client()
     url = "http://www.atmovies.com.tw/movie/next/"
     Data = requests.get(url)
@@ -358,42 +371,36 @@ def movie_base():
     sp = BeautifulSoup(Data.text, "html.parser")
     lastUpdate = sp.find(class_="smaller09").text.replace("更新時間：", "")
 
-
-    result=sp.select(".filmListAllX li")
+    result = sp.select(".filmListAllX li")
     total = 0
     for item in result:
-      total += 1
-      movie_id = item.find("a").get("href").replace("/movie/", "").replace("/", "")
-      title = item.find(class_="filmtitle").text
-      picture = "https://www.atmovies.com.tw" + item.find("img").get("src")
-      hyperlink = "https://www.atmovies.com.tw" + item.find("a").get("href")
+        total += 1
+        movie_id = item.find("a").get("href").replace("/movie/", "").replace("/", "")
+        title = item.find(class_="filmtitle").text
+        picture = "https://www.atmovies.com.tw" + item.find("img").get("src")
+        hyperlink = "https://www.atmovies.com.tw" + item.find("a").get("href")
 
-      showDate = item.find(class_="runtime").text[5:15]
+        showDate = item.find(class_="runtime").text[5:15]
 
-      doc = {
-          "title": title,
-          "picture": picture,
-          "hyperlink": hyperlink,
-          "showDate": showDate,
-          "lastUpdate": lastUpdate
-      }
+        doc = {
+            "title": title,
+            "picture": picture,
+            "hyperlink": hyperlink,
+            "showDate": showDate,
+            "lastUpdate": lastUpdate
+        }
 
-      doc_ref = db.collection("電影2B").document(movie_id)
-      doc_ref.set(doc)
+        doc_ref = db.collection("電影2B").document(movie_id)
+        doc_ref.set(doc)
 
     R += "網站最近更新日期:" + lastUpdate + "<br>"
     R += "總共爬取" + str(total) + "部電影到資料庫"
-
     return R
 
 @app.route("/search")
 def search():
-    # 取得使用者輸入的關鍵字
     keyword = request.args.get("keyword", "")
-    
     db = firestore.client()
-    # 這裡抓取「電影2B」集合中所有的文件
-    # 注意：若電影數量超過數百部，建議使用 Firestore 的 where 查詢來優化
     docs = db.collection("電影2B").stream()
 
     results_html = ""
@@ -401,7 +408,6 @@ def search():
 
     for doc in docs:
         movie = doc.to_dict()
-        # 檢查關鍵字是否在電影標題中 (包含搜尋)
         if keyword in movie.get("title", ""):
             found_count += 1
             results_html += f"""
@@ -414,7 +420,6 @@ def search():
                 </div>
             """
 
-    # 組合搜尋頁面的外殼
     html_layout = f"""
     <html>
         <head><title>電影搜尋</title></head>
@@ -445,7 +450,6 @@ def road():
         Ro += item["路口名稱"] + "，原因 : " + item["主要肇因"]  + "，件數" + item["總件數"] + "<br>"
     return Ro
 
-# 全台縣市與 API 代碼對照表 (F-D0047 系列)
 CITY_CODES = {
     "臺北市": "F-D0047-061", "新北市": "F-D0047-069", "桃園市": "F-D0047-005",
     "臺中市": "F-D0047-073", "臺南市": "F-D0047-077", "高雄市": "F-D0047-065",
@@ -457,6 +461,7 @@ CITY_CODES = {
     "連江縣": "F-D0047-081"
 }
 
+
 # --- 6. 改造後的 AI 簡易交談頁面 ---
 @app.route("/AI", methods=["GET", "POST"])
 def AI():
@@ -467,22 +472,20 @@ def AI():
         user_question = request.form.get("question", "").strip()
         if user_question:
             try:
-                # 從環境變數讀取金鑰
                 api_key = os.environ.get("GEMINI_API_KEY", "")
                 if not api_key:
                     ai_response = "錯誤：尚未設定 GEMINI_API_KEY 環境變數。"
                 else:
-                    # 初始化 Gemini 客戶端並生成內容
-                    client = genai.Client(api_key=api_key)
-                    response = client.models.generate_content(
-                        model='gemini-3.5-flash',
+                    client_ai = genai.Client(api_key=api_key)
+                    # 修正模型名稱為正式支援的官方名稱
+                    response = client_ai.models.generate_content(
+                        model='gemini-2.5-flash',
                         contents=user_question,
                     )
                     ai_response = response.text
             except Exception as e:
                 ai_response = f"AI 產生回應時發生錯誤：{str(e)}"
 
-    # 簡易前端 HTML 模板
     html_template = """
     <!DOCTYPE html>
     <html>
@@ -529,7 +532,6 @@ def weather():
     target_city = request.args.get("city", "臺中市")
     city_code = CITY_CODES.get(target_city, "F-D0047-073")
     
-    # 修改處：從環境變數讀取 CWA_TOKEN
     token = os.environ.get("CWA_TOKEN")
     url = f"https://opendata.cwa.gov.tw/api/v1/rest/datastore/{city_code}?Authorization={token}"
 
