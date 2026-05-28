@@ -159,6 +159,10 @@ def about_me():
 def webdemo():
     return render_template("webdemo.html")
 
+@app.route("/webdemo7")
+def webdemo7():
+    return render_template("webdemo7.html")
+
 
 # --- 5. 傳值與計算 ---
 @app.route("/welcome", methods=["GET"])
