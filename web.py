@@ -93,39 +93,42 @@ def webhook():
         req = request.get_json(force=True)
         query_result = req.get("queryResult", {})
         
-        # 1. 優先抓取使用者實際輸入的文字
+        # 優先抓取使用者實際輸入的文字（如：「我想要帶你去浪漫的土耳其」）
         user_query = query_result.get("queryText", "")
         
         if not user_query:
             return jsonify({"fulfillmentText": "我是徐瑞穎設計的機器人。請問今天想聊聊什麼電影呢？"})
 
-        # 2. 設定給 Gemini 的系統指令（System Instruction）
+        # 設定給 Gemini 的系統指令，賦予它幽默、彈性的靈魂，同時顧及主要功能
         system_instruction = (
-            "你是徐瑞穎設計的電影推薦機器人助理。請用親切、專業的語氣回答使用者的問題。"
-            "如果使用者詢問特定分級的電影，請務必使用 `get_movies_by_rate` 工具來查詢即時資料庫。"
-            "如果是其他複雜的電影觀念、劇情討論、或是日常對話，請直接發揮你的 AI 知識庫回答。"
+            "你是徐瑞穎設計的電影推薦機器人助理。你非常有智慧、幽默且親切。\n"
+            "1. 如果使用者詢問特定電影分級，請務必調用 `get_movies_by_rate` 工具查詢資料庫。\n"
+            "2. 如果使用者問了奇奇怪怪、跟電影無關的問題（例如唱歌、聊天、開玩笑、講冷笑話），"
+            "請發揮你的 AI 創意與幽默感，順著對方的話接梗、熱情地陪他聊天，不用拘泥於電影主題！"
         )
 
-        # 3. 呼叫 Gemini API (修正後的 ToolConfig 寫法)
+        # 呼叫 Gemini API
         response = client.models.generate_content(
             model='gemini-2.5-flash',
             contents=user_query,
             config=types.GenerateContentConfig(
                 system_instruction=system_instruction,
                 tools=[get_movies_by_rate],
-                # 這裡直接傳入字串 "AUTO"，或是使用最新的 SDK 結構
                 tool_config=types.ToolConfig(
                     function_calling_config=types.FunctionCallingConfig(
-                        mode="AUTO"  # 修正處：直接使用字串常數避免屬性錯誤
+                        mode="AUTO"
                     )
                 )
             )
         )
 
-        # 4. 取得 Gemini 最終產出的回覆文字
+        # 取得 Gemini 最終產出的回覆文字
         bot_reply = response.text
 
-        # 5. 回傳給 Dialogflow 展現給使用者
+        # 如果 Gemini 回覆為空（極少見），給予一個安全回覆
+        if not bot_reply:
+            bot_reply = "哎呀，這問題太有趣了，讓我想想該怎麼接梗！"
+
         return jsonify({"fulfillmentText": bot_reply})
 
     except Exception as e:
