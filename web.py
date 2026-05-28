@@ -96,13 +96,19 @@ def webhook():
 
         if not user_query:
             return jsonify({"fulfillmentText": "哈囉！我是徐瑞穎設計的電影助理，今天想聊點什麼？"})
+        
+        if "Welcome" in intent_name or action == "input.welcome":
+            return jsonify({
+                "fulfillmentText": "哈囉！歡迎光臨！我是徐瑞穎設計的智慧 AI 助理。今天想聊點什麼？不論是想了解網頁功能、問問題，還是聊聊電影，儘管開口喔！"
+        })
 
         # 判定是否要開啟純聊天/接梗模式 (Fallback 或 Welcome)
         if action == "input.unknown" or "Fallback" in intent_name or "Welcome" in intent_name:
             # 修正處：移除包含「目前觸發未知模式」等干擾 Gemini 的字眼，強迫其正面、直接地回答問題
             system_instruction = (
-                "你是靜宜大學資訊管理系學生徐瑞穎開發的智慧 AI 助理。\n"
-                "請展現你的高情商與幽默感，針對使用者的輸入直接給出具體、熱情且有實質內容的回答。\n"
+                "你是一個智慧 AI 助理。\n"
+                "請展現你的專業性、高情商，針對使用者的輸入直接給出具體、有實質內容的回答。\n"
+                "回答以重點為主，條列式\n"
                 "特別注意：如果使用者詢問關於『靜宜資管』或學校相關特色話題，請務必認真、詳盡地列出其核心優勢（如結合理論與實務、智慧系統開發等），並「直接回答問題」，絕對不要只顧著說歡迎詞或寒暄打招呼！"
             )
         else:
