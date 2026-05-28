@@ -440,28 +440,71 @@ CITY_CODES = {
     "連江縣": "F-D0047-081"
 }
 
-@app.route("/AI")
+# --- 6. 改造後的 AI 簡易交談頁面 ---
+@app.route("/AI", methods=["GET", "POST"])
 def AI():
-    try:
-        # 優先從環境變數讀取 GEMINI_API_KEY，若沒有則使用填入的字串
-        api_key = os.environ.get("GEMINI_API_KEY", "")
-        
-        if not api_key:
-            return "錯誤：尚未設定 GEMINI_API_KEY 環境變數或金鑰。"
+    ai_response = ""
+    user_question = ""
+    
+    if request.method == "POST":
+        user_question = request.form.get("question", "").strip()
+        if user_question:
+            try:
+                # 從環境變數讀取金鑰
+                api_key = os.environ.get("GEMINI_API_KEY", "")
+                if not api_key:
+                    ai_response = "錯誤：尚未設定 GEMINI_API_KEY 環境變數。"
+                else:
+                    # 初始化 Gemini 客戶端並生成內容
+                    client = genai.Client(api_key=api_key)
+                    response = client.models.generate_content(
+                        model='gemini-3.5-flash',
+                        contents=user_question,
+                    )
+                    ai_response = response.text
+            except Exception as e:
+                ai_response = f"AI 產生回應時發生錯誤：{str(e)}"
 
-        # 在路由內初始化 client，確保每次請求或環境變數變更時都能正確抓取
-        client = genai.Client(api_key=api_key)
-        
-        response = client.models.generate_content(
-            model='gemini-3.5-flash',
-            contents='我想查詢靜宜大學資管系的評價？',
-        )
-        
-        # 加上簡單的 HTML 包裝與返回首頁鏈接，讓畫面比較好看
-        return f"<h2>AI 生成結果：</h2><p>{response.text}</p><hr><a href='/'>返回首頁</a>"
-        
-    except Exception as e:
-        return f"AI 產生回應時發生錯誤：{str(e)}"
+    # 簡易前端 HTML 模板
+    html_template = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title>瑞穎的簡易小 AI</title>
+        <style>
+            body { font-family: sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; background-color: #f9f9f9; }
+            .chat-box { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+            textarea { width: 100%; height: 80px; padding: 10px; border-radius: 5px; border: 1px solid #ccc; box-sizing: border-box; resize: none; }
+            button { background: #1a73e8; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-top: 10px; float: right; }
+            .result { margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px; clear: both; }
+            .q-text { color: #555; font-weight: bold; }
+            .a-box { background: #f1f3f4; padding: 15px; border-radius: 8px; white-space: pre-wrap; margin-top: 5px; }
+        </style>
+    </head>
+    <body>
+        <div class="chat-box">
+            <h2>🤖 瑞穎的簡易小 AI</h2>
+            <form action="/AI" method="POST">
+                <textarea name="question" placeholder="請問你想問什麼問題呢？...">{{ user_question }}</textarea>
+                <button type="submit">送出問題</button>
+            </form>
+            
+            {% if ai_response %}
+            <div class="result">
+                <p class="q-text">❓ 你的問題：{{ user_question }}</p>
+                <p>💡 AI 回應：</p>
+                <div class="a-box">{{ ai_response }}</div>
+            </div>
+            {% endif %}
+            
+            <br style="clear:both;"><hr>
+            <a href="/">返回首頁</a>
+        </div>
+    </body>
+    </html>
+    """
+    return render_template_string(html_template, user_question=user_question, ai_response=ai_response)
 
 
 @app.route("/weather")
