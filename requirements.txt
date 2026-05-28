@@ -3,3 +3,5 @@ flask
 firebase_admin
 
 bs4
+
+google_genai

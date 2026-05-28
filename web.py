@@ -1,4 +1,5 @@
 from flask import Flask, render_template, request, render_template_string, make_response, jsonify
+from google import genai
 import requests
 import urllib3
 from bs4 import BeautifulSoup
@@ -47,6 +48,7 @@ def index():
     link += "<a href=/weather>台中市天氣和降雨機率</a><hr>"
     link += "<a href=/rate>本周新片進DB</a><hr>"
     link += "<a href=/webdemo>聊天機器人</a><hr>"
+    link += "<a href=/AI>AI</a><hr>"    
     return link
 
 # --- 在 webhook 函式上方修正 get_movies_by_rate ---
@@ -438,6 +440,30 @@ CITY_CODES = {
     "連江縣": "F-D0047-081"
 }
 
+@app.route("/AI")
+def AI():
+    try:
+        # 優先從環境變數讀取 GEMINI_API_KEY，若沒有則使用填入的字串
+        api_key = os.environ.get("GEMINI_API_KEY", "")
+        
+        if not api_key:
+            return "錯誤：尚未設定 GEMINI_API_KEY 環境變數或金鑰。"
+
+        # 在路由內初始化 client，確保每次請求或環境變數變更時都能正確抓取
+        client = genai.Client(api_key=api_key)
+        
+        response = client.models.generate_content(
+            model='gemini-3.5-flash',
+            contents='我想查詢靜宜大學資管系的評價？',
+        )
+        
+        # 加上簡單的 HTML 包裝與返回首頁鏈接，讓畫面比較好看
+        return f"<h2>AI 生成結果：</h2><p>{response.text}</p><hr><a href='/'>返回首頁</a>"
+        
+    except Exception as e:
+        return f"AI 產生回應時發生錯誤：{str(e)}"
+
+
 @app.route("/weather")
 def weather():
     target_city = request.args.get("city", "臺中市")
@@ -519,4 +545,4 @@ def weather():
     return render_template_string(html_template, weather_data=weather_data, city_list=list(CITY_CODES.keys()), current_city=target_city)
 
 if __name__ == "__main__":
-    app.run()
+    app.run(debug=True)
